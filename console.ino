@@ -6,9 +6,6 @@ LiquidCrystal lcd(12, 11, 5, 4, 3, 2);
 // http://man7.org/linux/man-pages/man4/console_codes.4.html
 // http://www.ecma-international.org/publications/files/ECMA-ST/Ecma-048.pdf
 
-int lcd_x = 0;
-int lcd_y = 0;
-
 enum class TerminalState: uint8_t
 {
   kInitial,
@@ -16,13 +13,112 @@ enum class TerminalState: uint8_t
   kControlSequence
 };
 
+template<int WIDTH, int HEIGHT>
+class Framebuffer
+{
+private:
+  int m_cursor_x;
+  int m_cursor_y;
+  char m_buffer[HEIGHT][WIDTH];
+
+public:
+  Framebuffer() :
+    m_cursor_x(0),
+    m_cursor_y(0),
+    m_buffer()
+  {
+  }
+
+  void set_cursor(int x, int y)
+  {
+    m_cursor_x = x;
+    m_cursor_y = y;
+    lcd.setCursor(x, y);
+  }
+
+  void insert(char c)
+  {
+    if (m_cursor_x >= WIDTH)
+    {
+      next_row();
+    }
+
+    lcd.write(c);
+    m_buffer[m_cursor_y][m_cursor_x] = c;
+    m_cursor_x += 1;
+  }
+
+  void newline()
+  {
+    next_row();
+  }
+
+  void carriage_return()
+  {
+    m_cursor_x = 0;
+    lcd.setCursor(m_cursor_x, m_cursor_y);
+  }
+
+  void clear()
+  {
+    lcd.clear();
+    lcd.setCursor(m_cursor_x, m_cursor_y);
+
+    //m_cursor_x = 0;
+    //m_cursor_y = 0;
+
+    for(int y = 0; y < HEIGHT; ++y)
+    {
+      memset(m_buffer[y], ' ', WIDTH);
+    }
+  }
+
+private:
+  void next_row()
+  {
+    m_cursor_x = 0;
+    m_cursor_y += 1;
+
+    if (m_cursor_y >= HEIGHT)
+    {
+      scroll_up();
+      m_cursor_y = HEIGHT - 1;
+    }
+    lcd.setCursor(m_cursor_x, m_cursor_y);
+  }
+
+  /** Scroll up one line */
+  void scroll_up()
+  {
+    for(int y = 0; y < HEIGHT - 1; ++y)
+    {
+      memcpy(m_buffer[y], m_buffer[y + 1], WIDTH);
+    }
+    memset(m_buffer[HEIGHT - 1], ' ', WIDTH);
+    sync_buffer();
+  }
+
+  /** Copy the framebuffer to the LCD */
+  void sync_buffer()
+  {
+    for(int y = 0; y < HEIGHT; ++y)
+    {
+      lcd.setCursor(0, y);
+      for(int x = 0; x < WIDTH; ++x)
+      {
+        lcd.print(m_buffer[y][x]);
+      }
+    }
+  }
+};
+
+Framebuffer<20, 4> framebuffer;
+
 class Terminal
 {
 private:
   const int m_width;
   const int m_height;
-  int m_cursor_x;
-  int m_cursor_y;
   int m_ctrl_seq[16];
   int m_ctrl_idx;
   TerminalState m_state;
@@ -31,8 +127,6 @@ public:
   Terminal(int w, int h) :
     m_width(w),
     m_height(h),
-    m_cursor_x(0),
-    m_cursor_y(0),
     m_ctrl_seq(),
     m_ctrl_idx(0),
     m_state(TerminalState::kInitial)
@@ -73,33 +167,15 @@ public:
         break;
 
       case '\n':
-        lcd_x = 0;
-        lcd_y += 1;
-        if (lcd_y >= m_height)
-        {
-          lcd_y = 0;
-        }
-        lcd.setCursor(lcd_x, lcd_y);
+        framebuffer.newline();
         break;
 
       case '\r':
-        lcd_x = 0;
-        lcd.setCursor(lcd_x, lcd_y);
+        framebuffer.carriage_return();
         break;
 
       default:
-        lcd.write(c);
-        lcd_x += 1;
-        if (lcd_x >= m_width)
-        {
-          lcd_x = 0;
-          lcd_y += 1;
-          if (lcd_y >= m_height)
-          {
-            lcd_y = 0;
-          }
-          lcd.setCursor(lcd_x, lcd_y);
-        }
+        framebuffer.insert(c);
         break;
     }
   }
@@ -111,6 +187,7 @@ public:
       case '[':
         m_state = TerminalState::kControlSequence;
         m_ctrl_idx = 0;
+        // FIXME: clear ctrl_seq
         m_ctrl_seq[m_ctrl_idx] = 0;
         break;
 
@@ -180,9 +257,7 @@ public:
 
         case 'H':
           // Move cursor to the indicated row, column (origin at 1,1).
-          m_cursor_x = m_ctrl_seq[0];
-          m_cursor_y = m_ctrl_seq[1];
-          lcd.setCursor(m_cursor_x, m_cursor_y);
+          framebuffer.set_cursor(m_ctrl_seq[0] - 1, m_ctrl_seq[1] - 1);
           break;
 
         case 'J':
@@ -195,7 +270,7 @@ public:
           }
           else if (m_ctrl_seq[0] == 2)
           {
-            lcd.clear();
+            framebuffer.clear();
           }
           else if (m_ctrl_seq[0] == 3)
           {
