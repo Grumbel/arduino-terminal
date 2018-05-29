@@ -303,6 +303,7 @@ public:
           }
           else if (m_ctrl_seq[0] == 3)
           {
+            framebuffer.clear();
           }
           break;
 
