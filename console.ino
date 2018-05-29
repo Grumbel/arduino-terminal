@@ -36,6 +36,24 @@ public:
     lcd.setCursor(x, y);
   }
 
+  void move_cursor(int dx, int dy)
+  {
+    m_cursor_x += dx;
+    m_cursor_y += dy;
+
+    if (m_cursor_x < 0)
+      m_cursor_x = 0;
+    else if (m_cursor_x >= WIDTH)
+      m_cursor_x = WIDTH - 1;
+
+    if (m_cursor_y < 0)
+      m_cursor_y = 0;
+    else if (m_cursor_y >= HEIGHT)
+      m_cursor_y = HEIGHT - 1;
+
+    lcd.setCursor(m_cursor_x, m_cursor_y);
+  }
+
   void insert(char c)
   {
     if (m_cursor_x >= WIDTH)
@@ -236,18 +254,22 @@ public:
 
         case 'A':
           // Move cursor up the indicated # of rows.
+          framebuffer.move_cursor(0, -m_ctrl_seq[0]);
           break;
 
         case 'B':
           // Move cursor down the indicated # of rows.
+          framebuffer.move_cursor(0, m_ctrl_seq[0]);
           break;
 
         case 'C':
           // Move cursor right the indicated # of columns.
+          framebuffer.move_cursor(m_ctrl_seq[0], 0);
           break;
 
         case 'D':
           // Move cursor left the indicated # of columns.
+          framebuffer.move_cursor(-m_ctrl_seq[0], 0);
           break;
 
         case 'E':
