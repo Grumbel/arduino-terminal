@@ -174,6 +174,13 @@ public:
         framebuffer.carriage_return();
         break;
 
+      case '\t':
+        for(int i = 0; i < 8; ++i)
+        {
+          framebuffer.insert(' ');
+        }
+        break;
+
       default:
         framebuffer.insert(c);
         break;
