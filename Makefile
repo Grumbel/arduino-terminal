@@ -8,7 +8,7 @@ compile:
 	${ARDUINO} --verify ${OPTS} ${SOURCE}
 
 upload:
-	${ARDUINO} --upload ${OPTS} ${SOURCE}
+	${ARDUINO} --upload ${OPTS} ${SOURCE} --port /dev/ttyUSB0
 
 .PHONY: compile upload
 
