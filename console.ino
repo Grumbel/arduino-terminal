@@ -21,6 +21,8 @@
 // LiquidCrystal(rs, enable, d4, d5, d6, d7)
 LiquidCrystal lcd(12, 11, 5, 4, 3, 2);
 
+const int BELL_PIN = 7;
+
 // http://man7.org/linux/man-pages/man4/console_codes.4.html
 // http://www.ecma-international.org/publications/files/ECMA-ST/Ecma-048.pdf
 
@@ -30,6 +32,37 @@ enum class TerminalState: uint8_t
   kEscape,
   kControlSequence
 };
+
+template<int PIN>
+class Bell
+{
+private:
+  unsigned int m_stoptime;
+
+public:
+  Bell() :
+    m_stoptime(0)
+  {
+  }
+
+  void begin() {
+    pinMode(PIN, OUTPUT);
+  }
+
+  void ring(int msec) {
+    digitalWrite(PIN, HIGH);
+    m_stoptime = millis() + msec;
+  }
+
+  void update() {
+    if (m_stoptime && millis() >= m_stoptime)
+    {
+      digitalWrite(PIN, LOW);
+    }
+  }
+};
+
+Bell<BELL_PIN> g_bell;
 
 template<int WIDTH, int HEIGHT>
 class Framebuffer
@@ -208,6 +241,10 @@ public:
 
       case '\r':
         framebuffer.carriage_return();
+        break;
+
+      case '\a':
+        g_bell.ring(250);
         break;
 
       case '\t':
@@ -423,9 +460,10 @@ Terminal terminal(20, 4);
 
 void setup()
 {
+  g_bell.begin();
   lcd.begin(20, 4);
   Serial.begin(115200);
-  terminal.print("--Console V0.2--");
+  terminal.print("--Console V0.3.2--");
 }
 
 void loop()
@@ -435,6 +473,8 @@ void loop()
     char c = Serial.read();
     terminal.put_char(c);
   }
+
+  g_bell.update();
 }
 
 /* EOF */
